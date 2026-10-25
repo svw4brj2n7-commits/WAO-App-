@@ -26,6 +26,8 @@ in der App unter Praxis → Einstellungen ändern.
 | `ADMIN_PIN` | Praxis-PIN (nur beim ersten Start nötig) | – |
 | `PORT` | Port des Servers | `3000` |
 | `DATA_DIR` | Ordner für Datenbank und hochgeladene Dateien | `./data` |
+| `HOST` | Adresse, auf der der Server lauscht (hinter Caddy: `127.0.0.1`) | alle |
+| `TRUST_PROXY` | `1`, wenn ein Reverse Proxy wie Caddy davor sitzt | aus |
 
 Alle Daten liegen in `DATA_DIR` (`db.json` und `assets/`). Diesen Ordner regelmäßig sichern. Er ist per
 `.gitignore` vom Repo ausgeschlossen und darf nie eingecheckt werden.
@@ -39,6 +41,8 @@ Alle Daten liegen in `DATA_DIR` (`db.json` und `assets/`). Diesen Ordner regelm�
   Rechnungen, Finanzen, Befunde und andere Patienten sind gesperrt.
 
 ### Online stellen
+
+Eine Schritt-für-Schritt-Anleitung für Hetzner mit HTTPS steht in [ANLEITUNG-SERVER.md](ANLEITUNG-SERVER.md).
 
 Für den echten Betrieb mit Patientendaten (Gesundheitsdaten nach Art. 9 DSGVO):
 

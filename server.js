@@ -3,7 +3,8 @@
    dieselben Termine, Patienten und Übungen sehen. Keine externen Pakete nötig (Node.js 18+).
 
    Start:   ADMIN_PIN=geheim node server.js
-   Umgebung: PORT (Standard 3000), DATA_DIR (Standard ./data), ADMIN_PIN (Pflicht beim ersten Start)
+   Umgebung: PORT (Standard 3000), HOST (Standard alle Adressen), DATA_DIR (Standard ./data),
+             ADMIN_PIN (Pflicht beim ersten Start), TRUST_PROXY=1 hinter einem Reverse Proxy wie Caddy
 
    Rollen
    - Praxis:   nach Anmeldung mit PIN (HttpOnly-Cookie), voller Zugriff
@@ -16,6 +17,8 @@ const path = require('path');
 const crypto = require('crypto');
 
 const PORT = +process.env.PORT || 3000;
+const HOST = process.env.HOST || undefined;
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const DATA = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const ASSETS = path.join(DATA, 'assets');
 const DB_FILE = path.join(DATA, 'db.json');
@@ -86,7 +89,8 @@ function patientId(req) {
 /* einfache Bremse gegen Durchprobieren von PIN und Codes */
 const hits = new Map();
 function limited(req, key, max) {
-  const k = key + '|' + (req.socket.remoteAddress || ''); const now = Date.now();
+  const ip = TRUST_PROXY && req.headers['x-forwarded-for'] ? String(req.headers['x-forwarded-for']).split(',').pop().trim() : req.socket.remoteAddress;
+  const k = key + '|' + (ip || ''); const now = Date.now();
   const e = hits.get(k) || { n: 0, t: now };
   if (now - e.t > 15 * 60 * 1000) { e.n = 0; e.t = now; }
   e.n++; hits.set(k, e);
@@ -189,7 +193,7 @@ function readBody(req, max) {
     req.on('error', reject);
   });
 }
-const secure = req => req.headers['x-forwarded-proto'] === 'https' || req.socket.encrypted;
+const secure = req => (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https') || req.socket.encrypted;
 
 async function api(req, res, url) {
   const ctx = { admin: isAdmin(req), pid: null };
@@ -295,4 +299,4 @@ http.createServer(async (req, res) => {
     if (!e.status) console.error(e);
     if (!res.headersSent) send(res, e.status || (e instanceof SyntaxError ? 400 : 500), { error: e.code || 'error' });
   }
-}).listen(PORT, () => console.log(`WAO Server läuft auf http://localhost:${PORT}  (Daten: ${DATA})`));
+}).listen(PORT, HOST, () => console.log(`WAO Server läuft auf http://${HOST || 'localhost'}:${PORT}  (Daten: ${DATA})`));
