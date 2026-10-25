@@ -1,0 +1,13 @@
+{
+  "name": "wao-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Physiotherapie Wirths – Praxis-App und Übungskatalog mit Server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

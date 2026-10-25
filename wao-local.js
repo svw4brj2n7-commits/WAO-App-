@@ -1,8 +1,10 @@
 /* WAO lokaler Laufzeit-Ersatz
    Die Seiten wurden als Claude-Artefakte gebaut und nutzen dort window.claude.use('db' | 'assets' | 'downloads').
-   Läuft eine Seite außerhalb von claude.ai (z. B. lokal oder auf GitHub Pages), stellt dieses Skript dieselben
-   Schnittstellen im Browser bereit: Daten in localStorage, hochgeladene Dateien in IndexedDB, Downloads als Datei-Download.
-   Hinweis: Die Daten liegen dann nur in diesem Browser auf diesem Gerät. */
+   Außerhalb von claude.ai stellt dieses Skript dieselben Schnittstellen bereit:
+   - über den WAO Server (server.js): Daten und Dateien liegen zentral auf dem Server, alle Geräte sehen dasselbe
+   - ohne Server (z. B. Datei direkt geöffnet oder GitHub Pages): Daten in localStorage, Dateien in IndexedDB,
+     also nur in diesem Browser auf diesem Gerät
+   Downloads werden in beiden Fällen als normaler Datei-Download gespeichert. */
 (function () {
   if (window.claude && window.claude.use) return;
 
@@ -102,7 +104,8 @@
     .catch(() => {})
     .then(() => { if (typeof window.render === 'function') try { window.render(); } catch (e) {} });
 
-  window.waoBlobUrl = id => urls[id] || '';
+  let serverMode = false;
+  window.waoBlobUrl = id => serverMode ? '/api/assets/' + encodeURIComponent(id) : (urls[id] || '');
 
   const assets = {
     upload: async file => {
@@ -125,11 +128,89 @@
     }
   };
 
+  /* ---------- WAO Server ---------- */
+  async function call(url, body, headers = {}) {
+    const code = (() => { try { return localStorage.getItem('meCode') || ''; } catch (e) { return ''; } })();
+    const r = await fetch(url, { method: 'POST', credentials: 'same-origin', body,
+      headers: { 'X-Patient-Code': code, ...headers } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(j.error || ('HTTP ' + r.status)); e.code = j.error || 'error'; e.status = r.status; throw e; }
+    return j;
+  }
+  const dbCall = q => call('/api/db', JSON.stringify(q), { 'Content-Type': 'application/json' });
+
+  const sListeners = new Set();
+  let lastVersion = 0, polling = false;
+  const refresh = () => sListeners.forEach(l => l());
+  async function poll() {
+    try {
+      const r = await fetch('/api/version', { credentials: 'same-origin', cache: 'no-store' });
+      const { v } = await r.json();
+      if (v !== lastVersion) { lastVersion = v; refresh(); }
+    } catch (e) {}
+  }
+  function startPolling() {
+    if (polling) return; polling = true;
+    setInterval(() => { if (!document.hidden) poll(); }, 4000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+  }
+  const afterWrite = () => setTimeout(poll, 0);
+
+  function sDocRef(c, id) {
+    const read = async () => { const { doc } = await dbCall({ op: 'get', coll: c, id }); return docSnap(id, doc === null ? undefined : doc); };
+    return {
+      id, path: c + '/' + id,
+      get: read,
+      set: async (data, opts) => { await dbCall({ op: 'set', coll: c, id, data, merge: !!(opts && opts.merge) }); afterWrite(); },
+      update: async data => { await dbCall({ op: 'update', coll: c, id, data }); afterWrite(); },
+      delete: async () => { await dbCall({ op: 'delete', coll: c, id }); afterWrite(); },
+      onSnapshot: (cb, err) => {
+        const l = () => read().then(cb, e => err ? err(e) : console.warn(e));
+        sListeners.add(l); l(); startPolling(); return () => sListeners.delete(l);
+      }
+    };
+  }
+  function sQuery(c, filters = [], order = [], lim = null) {
+    const run = async () => {
+      const { docs } = await dbCall({ op: 'query', coll: c, filters, order, limit: lim });
+      return qSnap(docs.map(d => docSnap(d.id, d.data)));
+    };
+    return {
+      where: (f, op, v) => sQuery(c, [...filters, [f, op, v]], order, lim),
+      orderBy: (f, dir = 'asc') => sQuery(c, filters, [...order, [f, dir]], lim),
+      limit: n => sQuery(c, filters, order, n),
+      doc: id => sDocRef(c, id || newId()),
+      get: run,
+      onSnapshot: (cb, err) => {
+        const l = () => run().then(cb, e => err ? err(e) : console.warn(e));
+        sListeners.add(l); l(); startPolling(); return () => sListeners.delete(l);
+      }
+    };
+  }
+  const serverDb = {
+    collection: name => sQuery(name),
+    doc: path => { const [c, id] = String(path).split('/'); return sDocRef(c, id); },
+    login: async pin => { try { await call('/api/login', JSON.stringify({ pin }), { 'Content-Type': 'application/json' }); refresh(); return true; } catch (e) { return false; } },
+    logout: async () => { try { await call('/api/logout', '{}', { 'Content-Type': 'application/json' }); } catch (e) {} },
+    setPin: async pin => { await call('/api/pin', JSON.stringify({ pin }), { 'Content-Type': 'application/json' }); }
+  };
+  const serverAssets = {
+    upload: async file => call('/api/assets', file, { 'Content-Type': file.type || 'application/octet-stream' }),
+    delete: async id => { await fetch('/api/assets/' + encodeURIComponent(id), { method: 'DELETE', credentials: 'same-origin' }); }
+  };
+
+  const mode = /^https?:$/.test(location.protocol)
+    ? fetch('/api/version', { credentials: 'same-origin', cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null).then(j => { serverMode = !!(j && typeof j.v === 'number'); if (serverMode) lastVersion = j.v; })
+        .catch(() => {})
+    : Promise.resolve();
+
   window.claude = {
     local: true,
     use: async name => {
-      if (name === 'db') return db;
-      if (name === 'assets') { await ready; return assets; }
+      await mode;
+      if (name === 'db') return serverMode ? serverDb : db;
+      if (name === 'assets') { if (serverMode) return serverAssets; await ready; return assets; }
       if (name === 'downloads') return downloads;
       return null;
     }

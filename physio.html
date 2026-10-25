@@ -1284,7 +1284,7 @@ function viewAdmin(){
     <input id="pin" data-keep type="password" inputmode="numeric" placeholder="PIN"><button class="btn full" onclick="loginAdmin()">Anmelden</button><div class="err" id="pinErr"></div></div>`;
   if(!S.db) return noDb();
   const tabs=[['termine','Termine'],['patienten','Patienten'],['uebungen','Übungen'],['bewegung','Bewegungsanalyse'],['rechnungen','Rechnungen'],['finanzen','Finanzen'],['einstellungen','Einstellungen']];
-  const head=`<div class="sub">${tabs.map(([k,l])=>`<button class="${S.adminSub===k?'on':''}" onclick="S.adminSub='${k}';S.openPatient=null;render()">${l}</button>`).join('')}<button style="margin-left:auto" onclick="S.admin=false;render()">Abmelden</button></div>`;
+  const head=`<div class="sub">${tabs.map(([k,l])=>`<button class="${S.adminSub===k?'on':''}" onclick="S.adminSub='${k}';S.openPatient=null;render()">${l}</button>`).join('')}<button style="margin-left:auto" onclick="S.admin=false;S.db&&S.db.logout&&S.db.logout();render()">Abmelden</button></div>`;
   if(S.adminSub==='patienten') return head+(S.openPatient?viewPatient(S.openPatient):viewPatients());
   if(S.adminSub==='uebungen') return head+viewExercises();
   if(S.adminSub==='bewegung') return head+'<div id="bwaSlot"></div>';
@@ -1293,7 +1293,7 @@ function viewAdmin(){
   if(S.adminSub==='finanzen') return head+viewFinance();
   return head+viewAppts();
 }
-function loginAdmin(){ if($('pin').value.trim()===String(S.settings.pin||'1234')){S.admin=true;lsSet('isAdmin','1');document.body.classList.add('show-admin');subscribeAdmin();render()} else $('pinErr').textContent='Falsche PIN.' }
+async function loginAdmin(){ const v=$('pin').value.trim(); const ok=S.db&&S.db.login?await S.db.login(v):v===String(S.settings.pin||'1234'); if(ok){S.admin=true;lsSet('isAdmin','1');document.body.classList.add('show-admin');subscribeAdmin();render()} else $('pinErr').textContent='Falsche PIN.' }
 
 const dt=t=>{const d=new Date(t);return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})};
 const sentLine=(n,label)=>n?`<div class="sent ok">✓ ${label} per ${esc(n.via)} · ${dt(n.at)}</div>`:'';
@@ -1627,7 +1627,7 @@ function viewSettings(){const av=S.settings.availability;const order=['1','2','3
   <div class="card"><h2>Praxis-PIN</h2><label for="newPin">Neue PIN (mind. 4 Zeichen)</label><input id="newPin" inputmode="numeric"><button class="btn full" onclick="savePin()">PIN ändern</button></div>`}
 async function saveAvail(){const av={};['0','1','2','3','4','5','6'].forEach(k=>av[k]={on:$('av_on_'+k).checked,start:$('av_s_'+k).value,end:$('av_e_'+k).value});
   try{await saveSettings({availability:av,duration:Math.max(15,+$('setDur').value||60),buffer:Math.max(0,+$('setBuf').value||0)});toast('Sprechzeiten gespeichert')}catch(e){toast('Speichern fehlgeschlagen')}}
-async function savePin(){const v=$('newPin').value.trim();if(v.length<4){toast('Mindestens 4 Zeichen');return}try{await saveSettings({pin:v});$('newPin').value='';toast('PIN geändert')}catch(e){toast('Speichern fehlgeschlagen')}}
+async function savePin(){const v=$('newPin').value.trim();if(v.length<4){toast('Mindestens 4 Zeichen');return}try{if(S.db.setPin)await S.db.setPin(v);else await saveSettings({pin:v});$('newPin').value='';toast('PIN geändert')}catch(e){toast('Speichern fehlgeschlagen')}}
 
 /* ---------- boot ---------- */
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;render();window.scrollTo(0,0)});
