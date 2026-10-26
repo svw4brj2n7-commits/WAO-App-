@@ -51,6 +51,18 @@ Für den echten Betrieb mit Patientendaten (Gesundheitsdaten nach Art. 9 DSGVO):
 - Mit dem Hoster einen Auftragsverarbeitungsvertrag (AVV) abschließen.
 - Eine sichere PIN wählen und den Ordner `data/` regelmäßig sichern.
 
+## App-Icon auf dem Handy
+
+Die Seiten bringen ein eigenes Icon (Ordner `icons/`) und ein App-Manifest (`manifest.webmanifest`) mit. Vom
+Home-Bildschirm aus öffnen sie sich dann wie eine App, ohne Browserleiste.
+
+- **iPhone (Safari):** Seite öffnen → Teilen-Symbol (□↑) → „Zum Home-Bildschirm“ → „Hinzufügen“
+- **Android (Chrome):** Seite öffnen → Menü ⋮ → „App installieren“ bzw. „Zum Startbildschirm hinzufügen“
+
+Damit Android die Seite als App installieren kann, muss sie über **HTTPS** laufen (siehe ANLEITUNG-SERVER.md).
+Das Icon zeigt das Gerät beim Hinzufügen an. Wurde die Seite schon vorher hinzugefügt, das alte Icon löschen
+und neu hinzufügen.
+
 ## Ohne Server
 
 Die Seiten laufen auch ohne Server, z. B. per GitHub Pages. Dann speichert `wao-local.js` alle Daten nur im

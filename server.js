@@ -26,7 +26,10 @@ const MAX_JSON = 2 * 1024 * 1024;
 const MAX_ASSET = 25 * 1024 * 1024;
 const SESSION_MS = 12 * 3600 * 1000;
 const PUBLIC_FILES = { '/': 'index.html', '/index.html': 'index.html', '/physio.html': 'physio.html',
-  '/uebungskatalog.html': 'uebungskatalog.html', '/wao-local.js': 'wao-local.js' };
+  '/uebungskatalog.html': 'uebungskatalog.html', '/wao-local.js': 'wao-local.js', '/manifest.webmanifest': 'manifest.webmanifest',
+  '/favicon.ico': 'icons/favicon-32.png', '/apple-touch-icon.png': 'icons/apple-touch-icon.png',
+  ...Object.fromEntries(['icon-192', 'icon-512', 'maskable-512', 'apple-touch-icon', 'favicon-32'].map(n => ['/icons/' + n + '.png', 'icons/' + n + '.png'])) };
+const FILE_TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
 const ASSET_TYPES = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime)|application\/pdf)$/;
 
 fs.mkdirSync(ASSETS, { recursive: true });
@@ -291,7 +294,7 @@ http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     const f = PUBLIC_FILES[url.pathname];
     if (f && (req.method === 'GET' || req.method === 'HEAD')) {
-      const type = f.endsWith('.js') ? 'text/javascript; charset=utf-8' : 'text/html; charset=utf-8';
+      const type = FILE_TYPES[path.extname(f)];
       return streamFile(req, res, path.join(__dirname, f), type, { 'Cache-Control': 'no-cache', 'Referrer-Policy': 'same-origin' });
     }
     send(res, 404, 'Nicht gefunden', { 'Content-Type': 'text/plain; charset=utf-8' });
